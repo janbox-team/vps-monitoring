@@ -21,6 +21,8 @@ import { StatusDot } from '@/components/StatusDot';
 import { OsBadge } from '@/components/OsBadge';
 import { UsageBar } from '@/components/UsageBar';
 import { MetricChart } from '@/components/MetricChart';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { RenameServerDialog } from '@/components/RenameServerDialog';
 import { formatBps, formatBytes, formatUptime, percent, timeAgo } from '@/lib/utils';
 
 interface AgentDetail {
@@ -83,6 +85,8 @@ const RANGES = [
 export function ServerDetailClient({ agentId }: { agentId: string }) {
   const router = useRouter();
   const [range, setRange] = useState('1h');
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data, isLoading, mutate } = useSWR<{ agent: AgentDetail }>(
     `/api/agents/${agentId}`,
@@ -98,31 +102,28 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
   const agent = data?.agent;
   const metrics = metricsData?.metrics ?? [];
 
-  const remove = async () => {
-    if (!confirm('Delete this server and all its metrics? This cannot be undone.')) return;
+  const performDelete = async () => {
     const res = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
-    if (res.ok) {
-      toast.success('Server removed');
-      router.push('/servers');
-    } else {
+    if (!res.ok) {
       toast.error('Failed to delete');
+      throw new Error('delete failed');
     }
+    toast.success('Server removed');
+    router.push('/servers');
   };
 
-  const renameLabel = async () => {
-    const label = prompt('New label (display name):', agent?.label ?? agent?.hostname ?? '');
-    if (label === null) return;
+  const saveRename = async (trimmed: string) => {
     const res = await fetch(`/api/agents/${agentId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: label.trim() }),
+      body: JSON.stringify({ label: trimmed }),
     });
-    if (res.ok) {
-      toast.success('Updated');
-      mutate();
-    } else {
+    if (!res.ok) {
       toast.error('Failed to update');
+      throw new Error('rename failed');
     }
+    toast.success('Updated');
+    mutate();
   };
 
   if (isLoading && !agent) {
@@ -170,7 +171,8 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
               {agent.label || agent.hostname}
             </h1>
             <button
-              onClick={renameLabel}
+              type="button"
+              onClick={() => setRenameOpen(true)}
               className="rounded-md p-1.5 text-ink-soft hover:bg-bg-muted hover:text-ink"
               title="Edit label"
             >
@@ -198,7 +200,7 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
             <RefreshCw className="h-4 w-4" />
             Refresh
           </button>
-          <button onClick={remove} className="btn-danger">
+          <button type="button" onClick={() => setDeleteOpen(true)} className="btn-danger">
             <Trash2 className="h-4 w-4" />
             Delete
           </button>
@@ -390,6 +392,29 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
           </div>
         </div>
       </div>
+
+      <RenameServerDialog
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+        label={agent.label}
+        hostname={agent.hostname}
+        onSave={saveRename}
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete server?"
+        description={
+          <>
+            Remove <span className="font-semibold text-ink">{agent.label || agent.hostname}</span> and
+            all metrics. <span className="text-danger">This cannot be undone.</span>
+          </>
+        }
+        cancelLabel="Cancel"
+        confirmLabel="Delete"
+        tone="danger"
+        onConfirm={performDelete}
+      />
     </div>
   );
 }
