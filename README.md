@@ -33,6 +33,23 @@ docker compose up -d
 
 Open `http://localhost:3000`, create your admin account, and you're done.
 
+### MongoDB outside Docker (Atlas, another VPS, …)
+
+The app does **not** need Mongo on the same Docker network. Set **`MONGODB_URI`** in `.env` to your real connection string (with user/password if required).
+
+- **Firewall / Atlas IP allowlist:** allow the **public egress IP** of the machine running the `web` container (or `0.0.0.0/0` only for testing).
+- **TLS:** Atlas uses `mongodb+srv://…`; self‑hosted often uses `mongodb://…` on port `27017` with TLS optional depending on your server.
+- **Docker Compose:** the file still defines a `mongo` service for local demos. If you use **only** external Mongo, start the app without pulling that service up:
+
+```bash
+# In .env set MONGODB_URI=... (Atlas or remote host)
+docker compose up -d --no-deps web
+```
+
+If you keep `docker compose up -d` (with the bundled `mongo` service), you can still point `web` at an external DB by setting `MONGODB_URI` in `.env`; the local `mongo` container will simply stay unused.
+
+**Debug:** open `GET /api/health/db` on your deployed site — it returns JSON `{ ok: true }` or a safe Mongo error (e.g. authentication vs timeout) without printing your password.
+
 ## 🖥️ Adding a server
 
 In the dashboard, click **Add server**. Copy the install command and run it on your VPS:
@@ -73,7 +90,7 @@ Then visit `http://localhost:3000`.
 
 | Variable                       | Required | Default                                | Description                                  |
 | ------------------------------ | -------- | -------------------------------------- | -------------------------------------------- |
-| `MONGODB_URI`                  | yes      | `mongodb://localhost:27017/vps-monitoring` | MongoDB connection string.                 |
+| `MONGODB_URI`                  | yes      | `mongodb://localhost:27017/vps-monitoring` | Any reachable MongoDB (local, other VPS, Atlas `mongodb+srv://…`). |
 | `JWT_SECRET`                   | yes (prod) | dev-only fallback                    | Secret used to sign session cookies.         |
 | `NEXT_PUBLIC_APP_URL`          | yes      | `http://localhost:3000`                | Public URL where the dashboard is reachable. |
 | `AGENT_OFFLINE_AFTER_SECONDS`  | no       | `60`                                   | After how many seconds an agent is "offline". |

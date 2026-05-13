@@ -28,10 +28,15 @@ export default function ServiceUnavailablePage() {
             <code className="font-mono text-xs">mongo</code> must match the Mongo service name).
           </li>
           <li>
-            <strong className="text-ink">Single container / VPS:</strong> set{' '}
+            <strong className="text-ink">External MongoDB (Atlas, other VPS):</strong> set{' '}
+            <code className="font-mono text-xs">MONGODB_URI</code> to the full URI from your provider.
+            Allow this server&apos;s IP in Mongo firewall / Atlas Network Access.
+          </li>
+          <li>
+            <strong className="text-ink">Single container / host Mongo:</strong> set{' '}
             <code className="font-mono text-xs">MONGODB_URI</code> to a reachable host (not{' '}
-            <code className="font-mono text-xs">localhost</code> unless Mongo is inside the same
-            container).
+            <code className="font-mono text-xs">localhost</code> from inside Docker unless you use{' '}
+            <code className="font-mono text-xs">host.docker.internal</code> or host networking).
           </li>
           <li>
             <strong className="text-ink">Secrets:</strong> ensure <code className="font-mono text-xs">JWT_SECRET</code>{' '}
@@ -46,8 +51,12 @@ export default function ServiceUnavailablePage() {
           </Link>
         </div>
         <p className="mt-4 text-xs text-ink-soft">
-          On the server, run: <code className="font-mono">docker compose logs web</code> (or your
-          process manager logs) for the real stack trace.
+          Quick check: open{' '}
+          <a href="/api/health/db" className="text-ink-muted underline hover:text-ink">
+            /api/health/db
+          </a>{' '}
+          — JSON shows the Mongo error name/message (passwords redacted). On the server, run:{' '}
+          <code className="font-mono">docker compose logs web</code> for full logs.
         </p>
       </div>
     </main>
