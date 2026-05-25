@@ -148,6 +148,10 @@ Configure the bot token, chat id, thresholds (CPU, RAM, disk `/`), and per-serve
 | DELETE | `/api/agents/:id`               | session     | Remove agent + metrics.           |
 | GET    | `/api/agents/:id/metrics`       | session     | Time-series metrics.              |
 
+## 💬 Support
+
+Need help? Contact Telegram: [@blackpink2812](https://t.me/blackpink2812)
+
 ## 📄 License
 
 MIT — do whatever you want, just don't blame us.
