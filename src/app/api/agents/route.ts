@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getAppSettings } from '@/lib/app-settings';
 import { connectDB } from '@/lib/db';
 import { Agent } from '@/lib/models/Agent';
 import { Metric } from '@/lib/models/Metric';
 import { getSessionFromCookies } from '@/lib/auth';
 import { env } from '@/lib/env';
+import {
+  sendTelegramDisconnectIfNeeded,
+  shouldSendTelegramDisconnectAlert,
+} from '@/lib/telegram-alerts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,6 +34,7 @@ export async function GET() {
 
   const offlineMs = env.AGENT_OFFLINE_AFTER_SECONDS * 1000;
   const now = Date.now();
+  const offlineAlertAt = new Date();
 
   const data = agents.map((a) => {
     const m = latestMap.get(a.agentId);
@@ -60,16 +66,46 @@ export async function GET() {
             memTotalBytes: m.memTotalBytes,
             diskUsedBytes: m.diskUsedBytes,
             diskTotalBytes: m.diskTotalBytes,
+            diskReadBps: m.diskReadBps,
+            diskWriteBps: m.diskWriteBps,
             netRxBytes: m.netRxBytes,
             netTxBytes: m.netTxBytes,
             netRxBps: m.netRxBps,
             netTxBps: m.netTxBps,
+            dockerCpuPercent: m.dockerCpuPercent,
+            dockerMemUsedBytes: m.dockerMemUsedBytes,
+            dockerNetRxBps: m.dockerNetRxBps,
+            dockerNetTxBps: m.dockerNetTxBps,
+            dockerContainerCount: m.dockerContainerCount,
+            temperatureC: m.temperatureC,
+            gpuUtilPercent: m.gpuUtilPercent,
+            gpuMemUsedBytes: m.gpuMemUsedBytes,
+            gpuMemTotalBytes: m.gpuMemTotalBytes,
+            gpuPowerWatts: m.gpuPowerWatts,
             uptimeSeconds: m.uptimeSeconds,
             loadAvg1: m.loadAvg1,
           }
         : null,
     };
   });
+
+  const offlineAlertCandidates = agents.filter((a) => {
+    const online =
+      a.lastSeenAt && now - new Date(a.lastSeenAt).getTime() <= offlineMs ? true : false;
+    return !online && shouldSendTelegramDisconnectAlert(a);
+  });
+  if (offlineAlertCandidates.length > 0) {
+    const appSettings = await getAppSettings();
+    for (const agent of offlineAlertCandidates) {
+      const sent = await sendTelegramDisconnectIfNeeded(agent, appSettings, env.APP_URL, 'offline');
+      if (sent) {
+        await Agent.updateOne(
+          { agentId: agent.agentId },
+          { $set: { lastTelegramOfflineAlertAt: offlineAlertAt } }
+        );
+      }
+    }
+  }
 
   return NextResponse.json({ agents: data });
 }

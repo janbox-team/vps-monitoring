@@ -5,7 +5,7 @@ import { connectDB } from '@/lib/db';
 import { env } from '@/lib/env';
 import { Agent } from '@/lib/models/Agent';
 import { Metric } from '@/lib/models/Metric';
-import { sendTelegramOverloadIfNeeded } from '@/lib/telegram-alerts';
+import { sendTelegramDisconnectIfNeeded, sendTelegramOverloadIfNeeded } from '@/lib/telegram-alerts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
 const schema = z.object({
   agentId: z.string().min(1),
   token: z.string().min(1),
+  status: z.enum(['heartbeat', 'shutdown']).default('heartbeat'),
   cpuPercent: z.number().min(0).max(100).default(0),
   loadAvg1: z.number().min(0).default(0),
   loadAvg5: z.number().min(0).default(0),
@@ -23,10 +24,22 @@ const schema = z.object({
   swapTotalBytes: z.number().min(0).default(0),
   diskUsedBytes: z.number().min(0).default(0),
   diskTotalBytes: z.number().min(0).default(0),
+  diskReadBps: z.number().min(0).default(0),
+  diskWriteBps: z.number().min(0).default(0),
   netRxBytes: z.number().min(0).default(0),
   netTxBytes: z.number().min(0).default(0),
   netRxBps: z.number().min(0).default(0),
   netTxBps: z.number().min(0).default(0),
+  dockerCpuPercent: z.number().min(0).default(0),
+  dockerMemUsedBytes: z.number().min(0).default(0),
+  dockerNetRxBps: z.number().min(0).default(0),
+  dockerNetTxBps: z.number().min(0).default(0),
+  dockerContainerCount: z.number().int().min(0).default(0),
+  temperatureC: z.number().min(0).default(0),
+  gpuUtilPercent: z.number().min(0).max(100).default(0),
+  gpuMemUsedBytes: z.number().min(0).default(0),
+  gpuMemTotalBytes: z.number().min(0).default(0),
+  gpuPowerWatts: z.number().min(0).default(0),
   uptimeSeconds: z.number().min(0).default(0),
   processCount: z.number().int().min(0).default(0),
 });
@@ -50,7 +63,31 @@ export async function POST(req: Request) {
   }
 
   const now = new Date();
+  const previousLastSeenAt = agent.lastSeenAt;
   agent.lastSeenAt = now;
+
+  if (parsed.data.status === 'shutdown') {
+    const appSettings = await getAppSettings();
+    const sent = await sendTelegramDisconnectIfNeeded(
+      {
+        agentId: agent.agentId,
+        hostname: agent.hostname,
+        label: agent.label,
+        publicIp: agent.publicIp,
+        lastSeenAt: previousLastSeenAt ?? now,
+        lastTelegramOfflineAlertAt: agent.lastTelegramOfflineAlertAt,
+      },
+      appSettings,
+      env.APP_URL,
+      'shutdown'
+    );
+    if (sent) {
+      agent.lastTelegramOfflineAlertAt = now;
+    }
+    await agent.save();
+    return NextResponse.json({ ok: true });
+  }
+
   await agent.save();
 
   await Metric.create({
@@ -66,10 +103,22 @@ export async function POST(req: Request) {
     swapTotalBytes: parsed.data.swapTotalBytes,
     diskUsedBytes: parsed.data.diskUsedBytes,
     diskTotalBytes: parsed.data.diskTotalBytes,
+    diskReadBps: parsed.data.diskReadBps,
+    diskWriteBps: parsed.data.diskWriteBps,
     netRxBytes: parsed.data.netRxBytes,
     netTxBytes: parsed.data.netTxBytes,
     netRxBps: parsed.data.netRxBps,
     netTxBps: parsed.data.netTxBps,
+    dockerCpuPercent: parsed.data.dockerCpuPercent,
+    dockerMemUsedBytes: parsed.data.dockerMemUsedBytes,
+    dockerNetRxBps: parsed.data.dockerNetRxBps,
+    dockerNetTxBps: parsed.data.dockerNetTxBps,
+    dockerContainerCount: parsed.data.dockerContainerCount,
+    temperatureC: parsed.data.temperatureC,
+    gpuUtilPercent: parsed.data.gpuUtilPercent,
+    gpuMemUsedBytes: parsed.data.gpuMemUsedBytes,
+    gpuMemTotalBytes: parsed.data.gpuMemTotalBytes,
+    gpuPowerWatts: parsed.data.gpuPowerWatts,
     uptimeSeconds: parsed.data.uptimeSeconds,
     processCount: parsed.data.processCount,
   });

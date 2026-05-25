@@ -19,6 +19,17 @@ export type HeartbeatForAlert = {
   diskTotalBytes: number;
 };
 
+export type AgentDisconnectReason = 'offline' | 'shutdown';
+
+export type AgentForDisconnectAlert = {
+  agentId: string;
+  hostname: string;
+  label?: string | null;
+  publicIp?: string | null;
+  lastSeenAt?: Date | string | null;
+  lastTelegramOfflineAlertAt?: Date | string | null;
+};
+
 export function evaluateOverload(
   m: HeartbeatForAlert,
   thresholds: { cpu: number; ram: number; disk: number }
@@ -95,6 +106,67 @@ export async function sendTelegramOverloadIfNeeded(
       )} <i>(≥ ${thresholds.disk}%)</i>`
     );
   }
+
+  const base = appUrl.replace(/\/$/, '');
+  const url = `${base}/servers/${encodeURIComponent(agent.agentId)}`;
+  const href = url.replace(/&/g, '&amp;');
+  lines.push(`<a href="${href}">Mở chi tiết trên dashboard</a>`);
+
+  const result = await telegramSendMessageHtml(
+    settings.telegramBotToken!,
+    settings.telegramChatId!,
+    lines.join('\n')
+  );
+  if (!result.ok) {
+    console.error('[telegram] sendMessage failed:', result.httpStatus, result.description);
+    return false;
+  }
+  return true;
+}
+
+export function shouldSendTelegramDisconnectAlert(agent: AgentForDisconnectAlert): boolean {
+  if (!agent.lastSeenAt) return false;
+  const lastSeen = new Date(agent.lastSeenAt).getTime();
+  if (!Number.isFinite(lastSeen)) return false;
+
+  const lastAlert = agent.lastTelegramOfflineAlertAt
+    ? new Date(agent.lastTelegramOfflineAlertAt).getTime()
+    : 0;
+  return !lastAlert || lastAlert < lastSeen;
+}
+
+/**
+ * Sends one Telegram message for each offline/shutdown incident.
+ * The caller must persist lastTelegramOfflineAlertAt when this returns true.
+ */
+export async function sendTelegramDisconnectIfNeeded(
+  agent: AgentForDisconnectAlert,
+  settings: ResolvedAppSettings,
+  appUrl: string,
+  reason: AgentDisconnectReason
+): Promise<boolean> {
+  if (!isTelegramAlertsConfigured(settings)) return false;
+  if (!shouldSendTelegramDisconnectAlert(agent)) return false;
+
+  const displayName = (agent.label?.trim() || agent.hostname || agent.agentId).slice(0, 200);
+  const title =
+    reason === 'shutdown'
+      ? '⚠️ VPS Monitor — agent dừng/shutdown'
+      : '⚠️ VPS Monitor — VPS mất kết nối';
+  const lines: string[] = [
+    `<b>${title}</b>`,
+    `<b>Máy:</b> ${escapeHtml(displayName)}`,
+    `<code>${escapeHtml(agent.agentId)}</code>`,
+  ];
+  if (agent.publicIp) lines.push(`<b>IP:</b> <code>${escapeHtml(agent.publicIp)}</code>`);
+  if (agent.lastSeenAt) {
+    lines.push(`<b>Lần cuối nhận heartbeat:</b> <code>${escapeHtml(new Date(agent.lastSeenAt).toISOString())}</code>`);
+  }
+  lines.push(
+    reason === 'shutdown'
+      ? 'Agent vừa gửi tín hiệu dừng. Có thể VPS đang shutdown/reboot hoặc service bị stop.'
+      : 'Dashboard không nhận heartbeat trong thời gian cho phép. Kiểm tra VPS, mạng hoặc service agent.'
+  );
 
   const base = appUrl.replace(/\/$/, '');
   const url = `${base}/servers/${encodeURIComponent(agent.agentId)}`;

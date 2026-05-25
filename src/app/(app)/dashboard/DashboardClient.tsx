@@ -39,6 +39,9 @@ interface AgentSummary {
     memTotalBytes: number;
     diskUsedBytes: number;
     diskTotalBytes: number;
+    dockerCpuPercent: number;
+    dockerContainerCount: number;
+    gpuUtilPercent: number;
     /** Cumulative bytes since boot (from /proc/net/dev). */
     netRxBytes: number;
     netTxBytes: number;
@@ -177,6 +180,8 @@ function ServerCard({ agent: a, onUpdated }: { agent: AgentSummary; onUpdated: (
   const memPct = percent(a.latest?.memUsedBytes ?? 0, a.latest?.memTotalBytes ?? a.totalMemoryBytes);
   const diskPct = percent(a.latest?.diskUsedBytes ?? 0, a.latest?.diskTotalBytes ?? a.totalDiskBytes);
   const cpu = a.latest?.cpuPercent ?? 0;
+  const dockerCpu = a.latest?.dockerCpuPercent ?? 0;
+  const gpu = a.latest?.gpuUtilPercent ?? 0;
   const title = a.label || a.hostname;
 
   return (
@@ -217,10 +222,12 @@ function ServerCard({ agent: a, onUpdated }: { agent: AgentSummary; onUpdated: (
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-[11px]">
+        <div className="grid grid-cols-5 gap-2 text-[11px]">
           <Metric icon={Cpu} value={`${cpu.toFixed(0)}%`} label="CPU" />
           <Metric icon={MemoryStick} value={`${memPct.toFixed(0)}%`} label="RAM" />
           <Metric icon={HardDrive} value={`${diskPct.toFixed(0)}%`} label="Disk" />
+          <Metric icon={ServerCog} value={`${dockerCpu.toFixed(0)}%`} label="Docker" />
+          <Metric icon={Activity} value={`${gpu.toFixed(0)}%`} label="GPU" />
         </div>
 
         <div className="space-y-2">

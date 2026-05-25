@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getAppSettings } from '@/lib/app-settings';
 import { connectDB } from '@/lib/db';
 import { Agent } from '@/lib/models/Agent';
 import { Metric } from '@/lib/models/Metric';
 import { getSessionFromCookies } from '@/lib/auth';
 import { env } from '@/lib/env';
+import {
+  sendTelegramDisconnectIfNeeded,
+  shouldSendTelegramDisconnectAlert,
+} from '@/lib/telegram-alerts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,8 +29,20 @@ export async function GET(_req: Request, { params }: RouteContext) {
   const latest = await Metric.findOne({ agentId: params.agentId }).sort({ ts: -1 }).lean();
 
   const offlineMs = env.AGENT_OFFLINE_AFTER_SECONDS * 1000;
-  const online =
-    agent.lastSeenAt && Date.now() - new Date(agent.lastSeenAt).getTime() <= offlineMs;
+  const online = agent.lastSeenAt
+    ? Date.now() - new Date(agent.lastSeenAt).getTime() <= offlineMs
+    : false;
+
+  if (!online && shouldSendTelegramDisconnectAlert(agent)) {
+    const appSettings = await getAppSettings();
+    const sent = await sendTelegramDisconnectIfNeeded(agent, appSettings, env.APP_URL, 'offline');
+    if (sent) {
+      await Agent.updateOne(
+        { agentId: agent.agentId },
+        { $set: { lastTelegramOfflineAlertAt: new Date() } }
+      );
+    }
+  }
 
   return NextResponse.json({
     agent: {

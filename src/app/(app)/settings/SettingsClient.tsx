@@ -243,11 +243,11 @@ export function SettingsClient({
       <form onSubmit={saveAlerts} className="card card-pad">
         <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
           <Send className="h-4 w-4 text-ink-muted" />
-          Telegram — cảnh báo quá tải
+          Telegram — cảnh báo quá tải & mất kết nối
         </h2>
         <p className="mt-1 text-sm text-ink-muted">
-          Khi CPU, RAM hoặc dung lượng ổ đĩa (/) vượt ngưỡng, dashboard gửi một tin qua Telegram. Cấu hình
-          được lưu trong MongoDB (không dùng biến môi trường cho token hay ngưỡng).
+          Khi CPU, RAM hoặc dung lượng ổ đĩa (/) vượt ngưỡng, VPS quá hạn heartbeat, hoặc agent gửi tín hiệu
+          shutdown/service stop, dashboard gửi một tin qua Telegram. Cấu hình được lưu trong MongoDB.
         </p>
 
         {alertLoading && (

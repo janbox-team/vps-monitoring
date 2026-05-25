@@ -19,6 +19,8 @@ export interface IAgent {
   lastSeenAt?: Date;
   /** Last time a Telegram overload alert was sent (per-server cooldown). */
   lastTelegramAlertAt?: Date;
+  /** Last offline/shutdown alert. Compared with lastSeenAt to alert once per outage. */
+  lastTelegramOfflineAlertAt?: Date;
   registeredAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +45,7 @@ const AgentSchema = new Schema<IAgent>(
     label: { type: String },
     lastSeenAt: { type: Date },
     lastTelegramAlertAt: { type: Date },
+    lastTelegramOfflineAlertAt: { type: Date },
     registeredAt: { type: Date, default: () => new Date() },
   },
   { timestamps: true }

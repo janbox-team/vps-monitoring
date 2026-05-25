@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
+  Activity,
   ArrowLeft,
   Cpu,
   HardDrive,
@@ -51,8 +52,20 @@ interface AgentDetail {
     swapTotalBytes: number;
     diskUsedBytes: number;
     diskTotalBytes: number;
+    diskReadBps: number;
+    diskWriteBps: number;
     netRxBps: number;
     netTxBps: number;
+    dockerCpuPercent: number;
+    dockerMemUsedBytes: number;
+    dockerNetRxBps: number;
+    dockerNetTxBps: number;
+    dockerContainerCount: number;
+    temperatureC: number;
+    gpuUtilPercent: number;
+    gpuMemUsedBytes: number;
+    gpuMemTotalBytes: number;
+    gpuPowerWatts: number;
     uptimeSeconds: number;
     processCount: number;
     loadAvg1: number;
@@ -68,8 +81,20 @@ interface MetricPoint {
   memTotalBytes: number;
   diskUsedBytes: number;
   diskTotalBytes: number;
+  diskReadBps: number;
+  diskWriteBps: number;
   netRxBps: number;
   netTxBps: number;
+  dockerCpuPercent: number;
+  dockerMemUsedBytes: number;
+  dockerNetRxBps: number;
+  dockerNetTxBps: number;
+  dockerContainerCount: number;
+  temperatureC: number;
+  gpuUtilPercent: number;
+  gpuMemUsedBytes: number;
+  gpuMemTotalBytes: number;
+  gpuPowerWatts: number;
   loadAvg1: number;
 }
 
@@ -153,6 +178,7 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
     latest?.diskTotalBytes ?? agent.totalDiskBytes
   );
   const swapPct = percent(latest?.swapUsedBytes ?? 0, latest?.swapTotalBytes ?? 0);
+  const gpuMemPct = percent(latest?.gpuMemUsedBytes ?? 0, latest?.gpuMemTotalBytes ?? 0);
 
   return (
     <div className="space-y-6">
@@ -207,7 +233,7 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-6">
         <GaugeCard
           icon={Cpu}
           label="CPU"
@@ -239,6 +265,24 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
           value={`↓ ${formatBps(latest?.netRxBps ?? 0)}`}
           sub={`↑ ${formatBps(latest?.netTxBps ?? 0)}`}
           pct={Math.min(100, ((latest?.netRxBps ?? 0) + (latest?.netTxBps ?? 0)) / 10_000_000)}
+        />
+        <GaugeCard
+          icon={ServerIcon}
+          label="Docker"
+          value={`${(latest?.dockerCpuPercent ?? 0).toFixed(1)}%`}
+          sub={`${latest?.dockerContainerCount ?? 0} containers · ${formatBytes(
+            latest?.dockerMemUsedBytes ?? 0
+          )}`}
+          pct={Math.min(100, latest?.dockerCpuPercent ?? 0)}
+        />
+        <GaugeCard
+          icon={Activity}
+          label="GPU"
+          value={`${(latest?.gpuUtilPercent ?? 0).toFixed(1)}%`}
+          sub={`${formatBytes(latest?.gpuMemUsedBytes ?? 0)} / ${formatBytes(
+            latest?.gpuMemTotalBytes ?? 0
+          )}`}
+          pct={latest?.gpuUtilPercent ?? 0}
         />
       </div>
 
@@ -289,6 +333,39 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
             />
           </ChartCard>
 
+          <ChartCard title="Disk usage" hint={formatBytes(agent.totalDiskBytes)}>
+            <MetricChart
+              data={metrics.map((m) => ({
+                ...m,
+                diskPct: m.diskTotalBytes ? (m.diskUsedBytes / m.diskTotalBytes) * 100 : 0,
+              }))}
+              series={[{ key: 'diskPct', label: 'Disk', color: '#8b5cf6' }]}
+              yFormatter={(v) => `${v.toFixed(0)}%`}
+              domain={[0, 100]}
+            />
+          </ChartCard>
+
+          <ChartCard title="Disk I/O" hint="read / write">
+            <MetricChart
+              data={metrics}
+              series={[
+                {
+                  key: 'diskReadBps',
+                  label: 'Read',
+                  color: '#f59e0b',
+                  formatter: (v) => formatBps(v),
+                },
+                {
+                  key: 'diskWriteBps',
+                  label: 'Write',
+                  color: '#6366f1',
+                  formatter: (v) => formatBps(v),
+                },
+              ]}
+              yFormatter={(v) => formatBps(v)}
+            />
+          </ChartCard>
+
           <ChartCard title="Network throughput" hint="bytes/sec">
             <MetricChart
               data={metrics}
@@ -306,7 +383,95 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
                   formatter: (v) => formatBps(v),
                 },
               ]}
+              yFormatter={(v) => formatBps(v)}
+            />
+          </ChartCard>
+
+          <ChartCard title="Docker CPU usage" hint="all running containers">
+            <MetricChart
+              data={metrics}
+              series={[{ key: 'dockerCpuPercent', label: 'Docker CPU', color: '#22c55e' }]}
+              yFormatter={(v) => `${v.toFixed(0)}%`}
+            />
+          </ChartCard>
+
+          <ChartCard title="Docker memory" hint="container usage">
+            <MetricChart
+              data={metrics}
+              series={[
+                {
+                  key: 'dockerMemUsedBytes',
+                  label: 'Docker memory',
+                  color: '#10b981',
+                  formatter: (v) => formatBytes(v),
+                },
+              ]}
               yFormatter={(v) => formatBytes(v)}
+            />
+          </ChartCard>
+
+          <ChartCard title="Docker network I/O" hint="bytes/sec">
+            <MetricChart
+              data={metrics}
+              series={[
+                {
+                  key: 'dockerNetRxBps',
+                  label: 'Download',
+                  color: '#84cc16',
+                  formatter: (v) => formatBps(v),
+                },
+                {
+                  key: 'dockerNetTxBps',
+                  label: 'Upload',
+                  color: '#ef4444',
+                  formatter: (v) => formatBps(v),
+                },
+              ]}
+              yFormatter={(v) => formatBps(v)}
+            />
+          </ChartCard>
+
+          <ChartCard title="Temperature" hint="max sensor">
+            <MetricChart
+              data={metrics}
+              series={[{ key: 'temperatureC', label: 'Temperature', color: '#f97316' }]}
+              yFormatter={(v) => `${v.toFixed(0)}°C`}
+            />
+          </ChartCard>
+
+          <ChartCard title="GPU power draw" hint="watts">
+            <MetricChart
+              data={metrics}
+              series={[
+                {
+                  key: 'gpuPowerWatts',
+                  label: 'GPU power',
+                  color: '#06b6d4',
+                  formatter: (v) => `${v.toFixed(1)} W`,
+                },
+              ]}
+              yFormatter={(v) => `${v.toFixed(0)} W`}
+            />
+          </ChartCard>
+
+          <ChartCard title="GPU utilization" hint="average">
+            <MetricChart
+              data={metrics}
+              series={[{ key: 'gpuUtilPercent', label: 'GPU', color: '#3b82f6' }]}
+              yFormatter={(v) => `${v.toFixed(0)}%`}
+              domain={[0, 100]}
+            />
+          </ChartCard>
+
+          <ChartCard title="GPU VRAM" hint={formatBytes(latest?.gpuMemTotalBytes ?? 0)}>
+            <MetricChart
+              data={metrics.map((m) => ({
+                ...m,
+                gpuMemPct: m.gpuMemTotalBytes ? (m.gpuMemUsedBytes / m.gpuMemTotalBytes) * 100 : 0,
+              }))}
+              series={[{ key: 'gpuMemPct', label: 'VRAM', color: '#0ea5e9' }]}
+              yFormatter={(v) => `${v.toFixed(0)}%`}
+              domain={[0, 100]}
             />
           </ChartCard>
 
@@ -332,6 +497,14 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
             <Row label="Cores" value={String(agent.cpuCores)} />
             <Row label="Memory" value={formatBytes(agent.totalMemoryBytes)} />
             <Row label="Disk" value={formatBytes(agent.totalDiskBytes)} />
+            <Row
+              label="Temperature"
+              value={(latest?.temperatureC ?? 0) > 0 ? `${(latest?.temperatureC ?? 0).toFixed(1)}°C` : '—'}
+            />
+            <Row
+              label="GPU power"
+              value={(latest?.gpuPowerWatts ?? 0) > 0 ? `${(latest?.gpuPowerWatts ?? 0).toFixed(1)} W` : '—'}
+            />
             <Row label="Public IP" value={agent.publicIp ?? '—'} mono />
             <Row label="Private IP" value={agent.privateIp ?? '—'} mono />
             <Row label="Uptime" value={formatUptime(latest?.uptimeSeconds ?? 0)} />
@@ -368,6 +541,20 @@ export function ServerDetailClient({ agentId }: { agentId: string }) {
               label="Disk (/)"
               hint={`${formatBytes(latest?.diskUsedBytes ?? 0)} / ${formatBytes(
                 latest?.diskTotalBytes ?? agent.totalDiskBytes
+              )}`}
+            />
+            <UsageBar
+              value={Math.min(100, latest?.dockerCpuPercent ?? 0)}
+              label="Docker CPU"
+              hint={`${(latest?.dockerCpuPercent ?? 0).toFixed(1)}% · ${
+                latest?.dockerContainerCount ?? 0
+              } containers`}
+            />
+            <UsageBar
+              value={gpuMemPct}
+              label="GPU VRAM"
+              hint={`${formatBytes(latest?.gpuMemUsedBytes ?? 0)} / ${formatBytes(
+                latest?.gpuMemTotalBytes ?? 0
               )}`}
             />
           </div>
