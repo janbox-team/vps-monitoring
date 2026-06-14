@@ -1,17 +1,21 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
-import { env } from '@/lib/env';
 
 const COOKIE_NAME = 'vpsmon_session';
 
 const PROTECTED_ROUTES = ['/dashboard', '/servers', '/settings'];
 const AUTH_ROUTES = ['/login'];
 
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET ?? '';
+  return new TextEncoder().encode(secret);
+}
+
 async function isAuthed(req: NextRequest): Promise<boolean> {
   const token = req.cookies.get(COOKIE_NAME)?.value;
   if (!token) return false;
   try {
-    await jwtVerify(token, new TextEncoder().encode(env.JWT_SECRET));
+    await jwtVerify(token, getJwtSecret());
     return true;
   } catch {
     return false;

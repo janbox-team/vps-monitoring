@@ -46,7 +46,7 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
 export async function setSessionCookie(token: string): Promise<void> {
   cookies().set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.COOKIE_SECURE === 'true',
     sameSite: 'lax',
     path: '/',
     maxAge: SESSION_MAX_AGE,

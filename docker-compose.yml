@@ -8,26 +8,37 @@ services:
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
+    networks:
+      - local-network
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   web:
     build: .
+    image: registry.quangit.site/dev/vps-monitoring:latest
     restart: unless-stopped
     depends_on:
       mongo:
         condition: service_healthy
+    networks:
+      - local-network
     environment:
       # Override in .env for external Mongo (Atlas, VPS, …). Default = service name `mongo` in this file.
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/vps-monitoring}
       JWT_SECRET: ${JWT_SECRET:?Please set JWT_SECRET in .env}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       AGENT_OFFLINE_AFTER_SECONDS: ${AGENT_OFFLINE_AFTER_SECONDS:-60}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
       - "${PORT:-3000}:3000"
+
+networks:
+  local-network:
+    external: true
 
 volumes:
   mongo_data:
