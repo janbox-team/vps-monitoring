@@ -68,7 +68,22 @@ export function SettingsClient({
   }, [alertData, alertsHydrated]);
 
   const copy = async () => {
-    await navigator.clipboard.writeText(appUrl);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(appUrl);
+      } else {
+        throw new Error('clipboard unavailable');
+      }
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = appUrl;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
     setCopied(true);
     toast.success('Copied');
     setTimeout(() => setCopied(false), 1500);
